@@ -12,10 +12,10 @@ from blist import sortedlist
 class DetecteurVisage:
     def __init__(self):
         self.net = caffe.Net("facenet.prototxt","facenet.caffemodel",caffe.TEST)
-        self.WINDOW_SIZE = (36,36)
-        self.STRIDE = 2
-        self.SCALE_FACTOR = 1.2
-        self.THRESHOLD = 0.75
+        self.WINDOW_SIZE = (36,36) #Size of filter caffe
+        self.STRIDE = 2 # intervals at which to apply the filters to the input (2 pixel)
+        self.SCALE_FACTOR = 1.2 # image scale factor
+        self.THRESHOLD = 0.75 # probability to conclure if found a face at a position. Here, we use "Softmax" function for the output layer "prob" (final layer in parameter file "facenet.prototxt")
 
     def execute(self,images_test_dir):
         # Delete all images in the result folder
@@ -50,10 +50,10 @@ class DetecteurVisage:
                         self.net.blobs['data'].reshape(*window_input.shape)
                         self.net.blobs['data'].data[...] = window_input
                         out = self.net.forward()
-                        # get output value of the layer 'prob'
+                        # get output value of the final layer 'prob'
                         prob_val = out['prob'][0][1]
-                        # Check output value is greater than the given threshold (a face appears probably at this
-                        # position (x,y))
+                        # Check output value (probability) is greater than the given threshold (a face appears
+                        # probably at this position (x,y))
                         if prob_val >= self.THRESHOLD:
                             box = generateBoundingBox(x, y, prob_val, self.WINDOW_SIZE, scale,img_width,img_height)
                             all_boxes.append(box)
@@ -126,7 +126,7 @@ def removeNeighborsBox(boxes):
                 break
             j += 1
         i += 1
-    i=0
+    i = 0
     while i < len_boxes-1:
         box1 = boxes[i]
         j = i+1
