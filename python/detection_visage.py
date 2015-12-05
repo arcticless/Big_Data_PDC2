@@ -13,7 +13,7 @@ class DetecteurVisage:
     def __init__(self):
         self.net = caffe.Net("facenet.prototxt","facenet.caffemodel",caffe.TEST)
         self.WINDOW_SIZE = (36,36) #Size of filter caffe
-        self.STRIDE = 2 # intervals at which to apply the filters to the input (2 pixel)
+        self.STRIDE = 2 # intervals at which to apply the filters to the input (in pixel)
         self.SCALE_FACTOR = 1.2 # image scale factor
         self.THRESHOLD = 0.75 # probability to conclure if found a face at a position. Here, we use "Softmax" function for the output layer "prob" (final layer in parameter file "facenet.prototxt")
 
@@ -32,7 +32,7 @@ class DetecteurVisage:
             if os.path.splitext(img_file)[1][1:] == "pgm" or os.path.splitext(img_file)[1][1:] == "jpg" or os.path.splitext(img_file)[1][1:] == "jpeg" or os.path.splitext(img_file)[1][1:] == "png":
                 print "Fichier: "+ img_file
                 img_file_path = images_test_dir+"/"+img_file
-                # Read the input image
+                # Read the input image with opencv
                 img_cv = cv2.imread(img_file_path)
                 img_height, img_width = img_cv.shape[:2]
                 found = False
@@ -59,10 +59,22 @@ class DetecteurVisage:
                             all_boxes.append(box)
                 if all_boxes:
                     found = True
+                    i=0
+                    len_all_boxes = len(all_boxes)
+                    # Keeps single rectangles (have not similar sizes rectangles)
+                    # in the output rectangles list after using method groupRectangles opencv
+                    while i< len_all_boxes:
+                        all_boxes.append(all_boxes[i])
+                        i += 1
+                    # clusters all rectangles with similar sizes and similar positions
+                    # Relative difference between sides of the rectangles to merge them into a group
+                    # one output rectangle for each group
+                    all_boxes = cv2.groupRectangles(all_boxes,1, 0.2)[0]
+                    # improves output rectangles list (remove some rectangles enclosed within other rectangle)
                     all_boxes = removeNeighborsBox(all_boxes)
                 #draw all rectangles at faces positions
                 for box in all_boxes:
-                    cv2.rectangle(img_cv,(box[0], box[1]),(box[2],box[3]),(0,0,255))
+                    cv2.rectangle(img_cv,(box[0], box[1]),(box[0]+box[2],box[1]+box[3]),(0,0,255))
                     cv2.imshow('detection_visage',img_cv)
                 if found == True:
                     #Pause the program to see the result and press the enter key to continue the program
@@ -102,44 +114,24 @@ def generateBoundingBox(x,y,prob_val,window_size, scale,img_width,img_height):
     real_w = int(window_size[0] * scale)
     real_h = int(window_size[1] * scale)
     print 'Visage détecté à Rect('+str(real_x)+','+str(real_y)+','+str(real_x+real_w)+','+str(real_y+real_h)+') prob='+str(prob_val)
-    return [real_x, real_y, min(real_x+real_w,img_width), min(real_y+real_h,img_height)]
+    return [real_x, real_y, min(real_w,img_width-real_x), min(real_h,img_height-real_y)]
 
 # Remove neighbors rectangle
 def removeNeighborsBox(boxes):
     len_boxes = len(boxes)
     i = 0
-    #sort the rectangles list by its coordinates vertex points
-    boxes = sortedlist(boxes,key=lambda x:(x[0],x[1],x[2],x[3]))
+    # sort the rectangles list by its coordinates with order (y,x) of vertex points
+    boxes = sortedlist(boxes,key=lambda x:(x[1],x[0],x[0]+x[3],x[1]+x[2]))
     while i < len_boxes-1:
         box1 = boxes[i]
         j = i+1
         while j < len_boxes:
             box2 = boxes[j]
-            if box2[0] >= box1[0] and box2[1] >= box1[1] and box2[2]<=box1[2] and box2[3]<=box1[3]:
+            #rectangle box2 inside rectangle box1
+            if box2[0] >= box1[0] and box2[1] >= box1[1] and box2[0]+box2[2]<=box1[0]+box1[2] and box2[1]+box2[3]<=box1[1]+box1[3]:
                 del boxes[j]
                 len_boxes -= 1
                 continue
-            elif box2[0] <= box1[0] and box2[1] <= box1[1] and box2[2] >= box1[2] and box2[3] >= box1[3]:
-                del boxes[i]
-                len_boxes -= 1
-                i -= 1
-                break
-            j += 1
-        i += 1
-    i = 0
-    while i < len_boxes-1:
-        box1 = boxes[i]
-        j = i+1
-        while j < len_boxes:
-            box2 = boxes[j]
-            # If the distances between 2 vertex points same x-coordinate or y-coordinate of 2 rectangles is lower than 10
-            if (box2[0]-box1[0] < 10 and box2[1]==box1[1]) or (box2[1]-box1[1] < 10 and box2[0]==box1[0]):
-                del boxes[i]
-                i -= 1
-                del boxes[j-1]
-                len_boxes -= 1
-                boxes.add([min(box1[0],box2[0]),min(box1[1],box2[1]),max(box1[2],box2[2]),max(box1[3],box2[3])])
-                break
             j += 1
         i += 1
     return boxes
